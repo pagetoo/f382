@@ -1,0 +1,59 @@
+name: Create Flutter Project
+
+# 触发条件：手动触发
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: '项目名称 (例如: abc)'
+        required: true
+        default: 'abc'
+      org_name:
+        description: '组织名称 (例如: xyz.123456)'
+        required: true
+        default: 'xyz.123456'
+
+# 环境变量
+env:
+  FLUTTER_VERSION: '3.38.2'
+
+# 权限配置
+permissions:
+  contents: write
+
+jobs:
+  create_project:
+    name: Create Flutter Project
+    runs-on: macos-latest
+    
+    steps:
+      # 步骤1: 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 步骤2: 设置 Flutter 环境
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      # 步骤3: 创建 Flutter 项目
+      - name: Create Flutter project
+        run: |
+          # 创建项目
+          flutter create --org ${{ github.event.inputs.org_name }} ${{ github.event.inputs.project_name }}
+          
+          # 移动项目文件到仓库根目录
+          mv ${{ github.event.inputs.project_name }}/* .
+          mv ${{ github.event.inputs.project_name }}/.* . 2>/dev/null || true
+          rmdir ${{ github.event.inputs.project_name }}
+
+      # 步骤4: 提交更改
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "feat: Create Flutter project ${{ github.event.inputs.project_name }}"
+          git push origin main 
