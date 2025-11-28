@@ -1,0 +1,104 @@
+name: Android Build
+
+# 触发条件
+on:
+  workflow_dispatch:
+
+# 环境变量
+env:
+  FLUTTER_VERSION: '3.38.2'
+
+# 添加权限配置
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Android App
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 步骤1: 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 步骤2: 配置 Flutter 依赖缓存
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.flutter
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-
+
+      # 步骤3: 设置 Flutter 环境
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      # 步骤4: 安装项目依赖
+      - name: Install Flutter dependencies
+        run: |
+          flutter pub get
+          flutter --version
+
+      # 步骤5: Flutter 诊断检查
+      - name: Run Flutter doctor
+        run: flutter doctor -v
+
+      # 步骤6: 构建 Android APK（带混淆）
+      - name: Build Android APK
+        run: |
+          echo "Starting build with --no-shrink flag..."
+          flutter build apk --no-shrink --obfuscate --split-debug-info=./build_info
+          echo "Build completed. Checking APK size..."
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+
+      # 步骤6.5: 验证 APK
+      - name: Verify APK
+        run: |
+          if [ ! -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            echo "APK file not found!"
+            exit 1
+          fi
+          cd build/app/outputs/flutter-apk/
+          sha256sum app-release.apk > app-release.apk.sha256
+
+      # 步骤7: 生成时间戳
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
+
+      # 步骤8: 创建 Release 并上传 APK
+      - name: Create Release and Upload APK
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: android-build-${{ steps.timestamp.outputs.timestamp }}
+          name: Android Build ${{ steps.timestamp.outputs.timestamp }}
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-release.apk.sha256
+          body: |
+            Build with Flutter ${{ env.FLUTTER_VERSION }}
+            - No shrink build
+            - Obfuscated
+            - Debug info split
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 步骤9: 上传构建产物（作为备份）
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-${{ steps.timestamp.outputs.timestamp }}
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-release.apk.sha256
+          retention-days: 7
