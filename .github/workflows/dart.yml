@@ -51,54 +51,37 @@ jobs:
       - name: Run Flutter doctor
         run: flutter doctor -v
 
-      # 步骤6: 构建 Android APK（带混淆）
+      # 步骤6: 构建 Android APK（带混淆和架构分离）
       - name: Build Android APK
-        run: |
-          echo "Starting build with --no-shrink flag..."
-          flutter build apk --no-shrink --obfuscate --split-debug-info=./build_info
-          echo "Build completed. Checking APK size..."
-          ls -lh build/app/outputs/flutter-apk/app-release.apk
-
-      # 步骤6.5: 验证 APK
-      - name: Verify APK
-        run: |
-          if [ ! -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
-            echo "APK file not found!"
-            exit 1
-          fi
-          cd build/app/outputs/flutter-apk/
-          sha256sum app-release.apk > app-release.apk.sha256
+        run: flutter build apk --release --obfuscate --split-debug-info=./build_info --split-per-abi
 
       # 步骤7: 生成时间戳
       - name: Generate timestamp
         id: timestamp
         run: echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
 
-      # 步骤8: 创建 Release 并上传 APK
-      - name: Create Release and Upload APK
+      # 步骤8: 创建 Release 并上传所有 APK 变体
+      - name: Create Release and Upload APKs
         uses: softprops/action-gh-release@v1
         with:
           tag_name: android-build-${{ steps.timestamp.outputs.timestamp }}
           name: Android Build ${{ steps.timestamp.outputs.timestamp }}
           files: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/app-release.apk.sha256
-          body: |
-            Build with Flutter ${{ env.FLUTTER_VERSION }}
-            - No shrink build
-            - Obfuscated
-            - Debug info split
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # 步骤9: 上传构建产物（作为备份）
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: android-build-${{ steps.timestamp.outputs.timestamp }}
           path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/app-release.apk.sha256
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
           retention-days: 7
